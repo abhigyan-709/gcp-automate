@@ -1,10 +1,8 @@
+import pandas as pd
 from googleapiclient import discovery
 from google.auth import default
 
-# Authenticate and get project info
 credentials, project = default()
-
-# Initialize the Compute Engine client
 compute = discovery.build('compute', 'v1', credentials=credentials)
 
 def list_detailed_instances(project):
@@ -22,10 +20,8 @@ def list_detailed_instances(project):
                 status = instance.get('status')
                 cpu_platform = instance.get('cpuPlatform')
                 creation_time = instance.get('creationTimestamp')
-                labels = instance.get('labels', {})
-                tags = instance.get('tags', {}).get('items', [])
 
-                # Get internal and external IPs
+                # Get internal and external IP
                 internal_ip = external_ip = None
                 for iface in instance.get('networkInterfaces', []):
                     internal_ip = iface.get('networkIP')
@@ -33,34 +29,38 @@ def list_detailed_instances(project):
                     if access_configs:
                         external_ip = access_configs[0].get('natIP')
 
+                # Labels
+                labels = instance.get('labels', {})
+                owner_name = labels.get('owner_name', '')
+                owner_state = labels.get('owner_state', '')
+
+                # Tags
+                tags = instance.get('tags', {}).get('items', [])
+                tag_1 = tags[0] if len(tags) > 0 else ''
+                tag_2 = tags[1] if len(tags) > 1 else ''
+
                 all_instances.append({
                     'name': name,
                     'zone': zone_name,
                     'machine_type': machine_type,
-                    'status': status,
                     'cpu_platform': cpu_platform,
+                    'status': status,
                     'creation_time': creation_time,
-                    'labels': labels,
-                    'tags': tags,
                     'internal_ip': internal_ip,
-                    'external_ip': external_ip
+                    'external_ip': external_ip,
+                    'owner_name': owner_name,
+                    'owner_state': owner_state,
+                    'tag_1': tag_1,
+                    'tag_2': tag_2
                 })
 
         request = compute.instances().aggregatedList_next(previous_request=request, previous_response=response)
 
     return all_instances
 
-# Call and print results
+# Fetch and save to Excel
 instances = list_detailed_instances(project)
-for vm in instances:
-    print(f"Name: {vm['name']}")
-    print(f"Zone: {vm['zone']}")
-    print(f"Machine Type: {vm['machine_type']}")
-    print(f"CPU Platform: {vm['cpu_platform']}")
-    print(f"Status: {vm['status']}")
-    print(f"Created On: {vm['creation_time']}")
-    print(f"Internal IP: {vm['internal_ip']}")
-    print(f"External IP: {vm['external_ip']}")
-    print(f"Labels: {vm['labels']}")
-    print(f"Tags: {vm['tags']}")
-    print('-' * 60)
+df = pd.DataFrame(instances)
+df.to_excel("gcp_vm_inventory.xlsx", index=False)
+
+print("✅ VM data with labels and tags saved to gcp_vm_inventory.xlsx")

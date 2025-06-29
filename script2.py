@@ -1,7 +1,8 @@
+import pandas as pd
 from googleapiclient import discovery
 from google.auth import default
 
-# Authenticate and get project info
+# Authenticate and get project
 credentials, project = default()
 
 # Initialize the Compute Engine client
@@ -25,7 +26,6 @@ def list_detailed_instances(project):
                 labels = instance.get('labels', {})
                 tags = instance.get('tags', {}).get('items', [])
 
-                # Get internal and external IPs
                 internal_ip = external_ip = None
                 for iface in instance.get('networkInterfaces', []):
                     internal_ip = iface.get('networkIP')
@@ -40,27 +40,23 @@ def list_detailed_instances(project):
                     'status': status,
                     'cpu_platform': cpu_platform,
                     'creation_time': creation_time,
-                    'labels': labels,
-                    'tags': tags,
                     'internal_ip': internal_ip,
-                    'external_ip': external_ip
+                    'external_ip': external_ip,
+                    'labels': str(labels),
+                    'tags': ", ".join(tags)
                 })
 
         request = compute.instances().aggregatedList_next(previous_request=request, previous_response=response)
 
     return all_instances
 
-# Call and print results
+# Fetch instance data
 instances = list_detailed_instances(project)
-for vm in instances:
-    print(f"Name: {vm['name']}")
-    print(f"Zone: {vm['zone']}")
-    print(f"Machine Type: {vm['machine_type']}")
-    print(f"CPU Platform: {vm['cpu_platform']}")
-    print(f"Status: {vm['status']}")
-    print(f"Created On: {vm['creation_time']}")
-    print(f"Internal IP: {vm['internal_ip']}")
-    print(f"External IP: {vm['external_ip']}")
-    print(f"Labels: {vm['labels']}")
-    print(f"Tags: {vm['tags']}")
-    print('-' * 60)
+
+# Convert to DataFrame
+df = pd.DataFrame(instances)
+
+# Save to Excel
+df.to_excel("gcp_vm_inventory.xlsx", index=False)
+
+print("✅ VM data saved to gcp_vm_inventory.xlsx")
